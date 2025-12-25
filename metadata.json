@@ -1,0 +1,8 @@
+{
+  "name": "SweetData Premium",
+  "description": "Full-tunnel WireGuard VPN with luxury red-white aesthetics and integrated AI concierge.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
