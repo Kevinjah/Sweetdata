@@ -6,9 +6,12 @@ interface TasksProps {
   user: UserData | null;
   adConfig: AdConfig;
   setUser: React.Dispatch<React.SetStateAction<UserData | null>>;
+  onActionComplete: () => void;
 }
 
-const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
+const BACKEND_URL = 'http://161.35.76.106:8080';
+
+const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser, onActionComplete }) => {
   const [dailyBonusClaimed, setDailyBonusClaimed] = useState(false);
   const [showAdOverlay, setShowAdOverlay] = useState(false);
   const [adProgress, setAdProgress] = useState(0);
@@ -31,13 +34,11 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
     const interval = setInterval(() => {
       progress += 20;
       setAdProgress(progress);
-      if (progress >= 100) {
-        clearInterval(interval);
-      }
+      if (progress >= 100) clearInterval(interval);
     }, 1000);
   };
 
-  const handleAdComplete = () => {
+  const handleAdComplete = async () => {
     setShowAdOverlay(false);
     if (pendingAction) {
       pendingAction();
@@ -45,13 +46,33 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
     }
   };
 
-  const claimDailyBonus = () => {
-    const action = () => {
-      setDailyBonusClaimed(true);
-      if (user) {
-        setUser({ ...user, balanceMB: user.balanceMB + 10 });
+  const verifyActionWithBackend = async (actionId: string, payload: any = {}) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tasks/verify`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.authToken}`
+        },
+        body: JSON.stringify({ actionId, ...payload })
+      });
+      if (response.ok) {
+        onActionComplete();
+        return true;
       }
-      alert("10MB Daily Bonus Claimed!");
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const claimDailyBonus = () => {
+    const action = async () => {
+      const success = await verifyActionWithBackend('daily_bonus');
+      if (success) {
+        setDailyBonusClaimed(true);
+        alert("10MB Daily Bonus Claimed!");
+      }
     };
 
     if (adConfig.enabled && adConfig.dailyLoginAdGated) {
@@ -62,9 +83,16 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
   };
 
   const handleReferralCopy = () => {
-    const action = () => {
-      navigator.clipboard.writeText(user?.referralCode || 'SD-UX-992');
-      alert("Referral Link Generated & Copied!");
+    const action = async () => {
+      // Backend generates/validates referral link
+      const response = await fetch(`${BACKEND_URL}/api/user/referral-link`, {
+        headers: { 'Authorization': `Bearer ${user?.authToken}` }
+      });
+      if (response.ok) {
+        const { link } = await response.json();
+        navigator.clipboard.writeText(link);
+        alert("Referral Link Generated & Copied!");
+      }
     };
 
     if (adConfig.enabled && adConfig.referralAdGated) {
@@ -80,14 +108,8 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
       return;
     }
 
-    const action = () => {
-      if (user) {
-        setUser({ 
-          ...user, 
-          balanceMB: user.balanceMB + adConfig.adRewardMB,
-          dailyAdsWatched: (user.dailyAdsWatched || 0) + 1
-        });
-      }
+    const action = async () => {
+      await verifyActionWithBackend('ad_watch', { adId: 'rewarded_main' });
       alert(`${adConfig.adRewardMB}MB Reward Credited!`);
     };
 
@@ -101,7 +123,6 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
         <p className="text-neutral-400 text-xs font-medium tracking-wide">Earn bandwidth via the mission protocol.</p>
       </div>
 
-      {/* Daily Bonus Card */}
       <div className="mb-6 p-6 rounded-[2rem] border-2 border-dashed border-neutral-100 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-black uppercase tracking-wider">Daily Protocol</h3>
@@ -118,7 +139,6 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
         </button>
       </div>
 
-      {/* Referral Card */}
       <div className="bg-black text-white p-7 rounded-[2.5rem] shadow-2xl mb-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#D40000]/20 rounded-full blur-3xl -mr-16 -mt-16" />
         <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#D40000] mb-3">Invitation Link</p>
@@ -151,7 +171,7 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
             </div>
             <button 
               disabled={t.completed || (t.isAdTask && user && user.dailyAdsWatched >= adConfig.maxDailyAds)}
-              onClick={t.isAdTask ? handleWatchAdTask : undefined}
+              onClick={t.isAdTask ? handleWatchAdTask : () => verifyActionWithBackend(t.id)}
               className={`px-6 py-2.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all ${
                 t.completed ? 'bg-neutral-100 text-neutral-300' : 'bg-black text-white active:scale-95'
               }`}
@@ -162,19 +182,13 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
         ))}
       </div>
 
-      {/* Simulated Fullscreen Ad Overlay */}
       {showAdOverlay && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-8">
           <div className="w-full max-w-xs aspect-[9/16] bg-neutral-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col">
             <div className="p-4 flex justify-between items-center bg-black/50 border-b border-white/5">
               <span className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Sponsored</span>
               {adProgress >= 100 && (
-                <button 
-                  onClick={handleAdComplete}
-                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white"
-                >
-                  ✕
-                </button>
+                <button onClick={handleAdComplete} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">✕</button>
               )}
             </div>
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
@@ -186,10 +200,7 @@ const Tasks: React.FC<TasksProps> = ({ user, adConfig, setUser }) => {
             </div>
             <div className="p-6">
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-[#D40000] transition-all duration-300"
-                  style={{ width: `${adProgress}%` }}
-                />
+                <div className="h-full bg-[#D40000] transition-all duration-300" style={{ width: `${adProgress}%` }} />
               </div>
               <p className="text-[8px] text-center text-neutral-500 uppercase mt-2 tracking-widest">
                 {adProgress < 100 ? `Reward in ${Math.ceil((100 - adProgress) / 20)}s` : 'Reward Ready'}

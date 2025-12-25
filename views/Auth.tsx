@@ -8,6 +8,8 @@ interface AuthProps {
   onSwitchMode: () => void;
 }
 
+const BACKEND_URL = 'http://161.35.76.106:8080';
+
 const Auth: React.FC<AuthProps> = ({ mode, onAuthSuccess, onSwitchMode }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,22 +19,26 @@ const Auth: React.FC<AuthProps> = ({ mode, onAuthSuccess, onSwitchMode }) => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate Backend Handshake to http://161.35.76.106:8080
-    setTimeout(() => {
-      // FIX: Added dailyAdsWatched to mockUser to match UserData interface
-      const mockUser: UserData = {
-        id: '123',
-        username: email.split('@')[0],
-        email: email,
-        balanceMB: 500,
-        plan: 'Silver Tier',
-        expiryDate: '2025-10-15',
-        referralCode: 'SD-' + Math.floor(Math.random() * 9000 + 1000),
-        dailyAdsWatched: 0
-      };
-      onAuthSuccess(mockUser);
+    try {
+      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        onAuthSuccess(data);
+      } else {
+        const err = await response.json();
+        alert(err.message || 'Authentication Protocol Error');
+      }
+    } catch (e) {
+      alert("Critical Node Error: Backend unreachable.");
+    } finally {
       setLoading(false);
-    }, 1800);
+    }
   };
 
   return (

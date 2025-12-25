@@ -34,11 +34,13 @@ export interface UserData {
   expiryDate: string;
   referralCode: string;
   dailyAdsWatched: number;
+  avatarUrl?: string;
+  authToken?: string;
 }
 
 export interface Message {
   id: string;
-  role: 'user' | 'model';
+  role: 'user' | 'model' | 'admin';
   text: string;
   timestamp: Date;
 }

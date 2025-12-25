@@ -4,14 +4,52 @@ import { UserData } from '../types';
 
 interface BundlesProps {
   user: UserData | null;
+  onPurchaseSuccess: () => void;
 }
 
-const Bundles: React.FC<BundlesProps> = ({ user }) => {
+const BACKEND_URL = 'http://161.35.76.106:8080';
+
+const Bundles: React.FC<BundlesProps> = ({ user, onPurchaseSuccess }) => {
   const bundles = [
-    { id: '3d', name: 'Elite Passage', duration: '3 Days', price: '62 KES', highlight: 'Unlimited Data' },
-    { id: '14d', name: 'Premium Voyage', duration: '14 Days', price: '250 KES', highlight: 'Full Support', popular: true },
-    { id: '30d', name: 'Legacy Horizon', duration: '30 Days', price: '530 KES', highlight: 'Platinum Nodes' },
+    { id: '3d', name: 'Elite Passage', duration: '3 Days', price: '62 KES', highlight: 'Unlimited Data', amount: 62 },
+    { id: '14d', name: 'Premium Voyage', duration: '14 Days', price: '250 KES', highlight: 'Full Support', popular: true, amount: 250 },
+    { id: '30d', name: 'Legacy Horizon', duration: '30 Days', price: '530 KES', highlight: 'Platinum Nodes', amount: 530 },
   ];
+
+  const handlePurchase = async (bundle: any) => {
+    if (!user?.authToken) {
+      alert("Account authentication required to lease bandwidth.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/payments/initiate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.authToken}`
+        },
+        body: JSON.stringify({
+          bundleId: bundle.id,
+          amount: bundle.amount,
+          currency: 'KES',
+          gateway: 'pesapal'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+          // Note: In real app, we'd listen for a callback or poll backend
+        }
+      } else {
+        alert("Session Initialization Failure.");
+      }
+    } catch (error: any) {
+      alert("Protocol error: Ensure you have a stable data connection.");
+    }
+  };
 
   return (
     <div className="h-full bg-white flex flex-col p-6 overflow-y-auto no-scrollbar">
@@ -40,7 +78,7 @@ const Bundles: React.FC<BundlesProps> = ({ user }) => {
             </div>
 
             <ul className="space-y-3 mb-8">
-              {['Full-Tunnel WireGuard', 'Military AES-256', b.highlight].map((feature, i) => (
+              {['Full-Tunnel Protocol', 'Military AES-256', b.highlight].map((feature, i) => (
                 <li key={i} className="flex items-center space-x-2">
                   <span className={`text-[8px] ${b.popular ? 'text-[#D40000]' : 'text-black'}`}>●</span>
                   <span className={`text-xs font-medium ${b.popular ? 'text-neutral-400' : 'text-neutral-600'}`}>{feature}</span>
@@ -48,7 +86,9 @@ const Bundles: React.FC<BundlesProps> = ({ user }) => {
               ))}
             </ul>
 
-            <button className={`w-full py-4 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+            <button 
+              onClick={() => handlePurchase(b)}
+              className={`w-full py-4 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
               b.popular ? 'bg-white text-black shadow-xl active:scale-95' : 'bg-black text-white active:scale-95'
             }`}>
               Secure Lease

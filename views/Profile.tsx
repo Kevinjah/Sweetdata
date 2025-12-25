@@ -1,23 +1,58 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { UserData } from '../types';
 
 interface ProfileProps {
   user: UserData | null;
   onLogout: () => void;
+  onProfileUpdate: () => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
+const BACKEND_URL = 'http://161.35.76.106:8080';
+
+const Profile: React.FC<ProfileProps> = ({ user, onLogout, onProfileUpdate }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.authToken) return;
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/user/avatar`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user.authToken}` },
+        body: formData
+      });
+      if (response.ok) {
+        onProfileUpdate();
+        alert("Profile Image Synchronized.");
+      }
+    } catch (e) {
+      alert("Synchronization Error.");
+    }
+  };
+
   return (
     <div className="p-6 bg-white h-full flex flex-col overflow-y-auto no-scrollbar">
       <div className="flex flex-col items-center mt-8 mb-12">
         <div className="relative">
-          <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-neutral-50 to-neutral-200 p-1 mb-6 shadow-xl flex items-center justify-center border border-neutral-100">
-            <div className="w-full h-full rounded-[2rem] bg-white flex items-center justify-center text-4xl shadow-inner">
-              <span className="text-[#D40000] font-luxury">SD</span>
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-neutral-50 to-neutral-200 p-1 mb-6 shadow-xl flex items-center justify-center border border-neutral-100 cursor-pointer overflow-hidden"
+          >
+            <div className="w-full h-full rounded-[2rem] bg-white flex items-center justify-center shadow-inner overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="Identity" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[#D40000] font-luxury text-4xl">SD</span>
+              )}
             </div>
           </div>
-          <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-black rounded-2xl flex items-center justify-center text-xs border-4 border-white shadow-lg">
+          <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-black rounded-2xl flex items-center justify-center text-xs border-4 border-white shadow-lg pointer-events-none">
             <span className="text-white text-lg">✏️</span>
           </div>
         </div>
@@ -30,7 +65,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
           { label: 'Identified E-mail', value: user?.email || 'N/A' },
           { label: 'Current Subscription', value: user?.plan || 'Free Tier' },
           { label: 'Lease Expiration', value: user?.expiryDate || 'N/A' },
-          { label: 'WireGuard Key (Ed25519)', value: 'WG-ED25...9X2' },
+          { label: 'Tunnel Key (Ed25519)', value: 'WG-ED25...9X2' },
         ].map((item) => (
           <div key={item.label} className="glass-card p-5 rounded-3xl border border-neutral-50 flex justify-between items-center shadow-sm">
             <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-widest">{item.label}</span>
@@ -44,7 +79,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
             <span className="text-xs">💳</span>
           </button>
           <button className="w-full glass-card p-5 rounded-3xl flex items-center justify-between hover:bg-neutral-50 transition-colors shadow-sm">
-            <span className="text-[10px] text-black font-bold uppercase tracking-widest">VPN Key Management</span>
+            <span className="text-[10px] text-black font-bold uppercase tracking-widest">Tunnel Key Management</span>
             <span className="text-xs">🔑</span>
           </button>
           <button className="w-full glass-card p-5 rounded-3xl flex items-center justify-between hover:bg-neutral-50 transition-colors shadow-sm">

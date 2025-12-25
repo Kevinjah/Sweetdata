@@ -1,9 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
-import { Message } from '../types';
+import { UserData, Message } from '../types';
 
-const SweetBot: React.FC = () => {
+interface SweetBotProps {
+  user: UserData | null;
+}
+
+const BACKEND_URL = 'http://161.35.76.106:8080';
+
+const SweetBot: React.FC<SweetBotProps> = ({ user }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -17,11 +22,27 @@ const SweetBot: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const fetchHistory = async () => {
+      if (!user?.authToken) return;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/chat/history`, {
+          headers: { 'Authorization': `Bearer ${user.authToken}` }
+        });
+        if (response.ok) {
+          const history = await response.json();
+          if (history.length > 0) setMessages(history.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+        }
+      } catch (e) {}
+    };
+    fetchHistory();
+  }, [user?.authToken]);
+
+  useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input.trim() || isTyping) return;
+    if (!input.trim() || isTyping || !user?.authToken) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -35,26 +56,27 @@ const SweetBot: React.FC = () => {
     setIsTyping(true);
 
     try {
-      // FIX: Use process.env.API_KEY directly without fallbacks as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: input,
-        config: {
-          systemInstruction: 'You are the SweetData Concierge, a world-class AI assistant for a luxury full-tunnel VPN service. Your tone is sophisticated, brief, and highly professional—reminiscent of a luxury hotel concierge. You help with bandwidth management (MB), bundle acquisition (KES), and privacy encryption. Never mention other brands. Use British English for extra elegance.',
+      const response = await fetch(`${BACKEND_URL}/api/chat/send`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.authToken}`
         },
+        body: JSON.stringify({ message: input })
       });
 
-      const modelMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: response.text || "Pardon me, but I seem to have encountered a momentary interruption in my processing.",
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, modelMessage]);
+      if (response.ok) {
+        const data = await response.json();
+        const modelMessage: Message = {
+          id: data.id || (Date.now() + 1).toString(),
+          role: data.role || 'model',
+          text: data.text,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, modelMessage]);
+      }
     } catch (error) {
-      console.error('Gemini Failure:', error);
+      console.error('Concierge Failure:', error);
     } finally {
       setIsTyping(false);
     }
@@ -90,7 +112,7 @@ const SweetBot: React.FC = () => {
                 <span className="text-[8px] font-bold uppercase tracking-widest">
                   {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                {m.role === 'model' && <span className="text-[8px] italic">SweetData Attaché</span>}
+                {m.role !== 'user' && <span className="text-[8px] italic">SweetData Attaché</span>}
               </div>
             </div>
           </div>
